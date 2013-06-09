@@ -1,0 +1,30 @@
+# ignore all files of types:
+*.aps
+*.bsc
+*.cache
+*.exe
+*.idb
+*.map
+*.lib
+*.ncb
+*.obj
+*.old
+*.opensdf
+*.pdb
+*.res
+*.sbr
+*.sdf
+*.suo
+*.user
+*.zip
+
+# ignore the following files:
+BuildLog.htm
+
+# ignore the following directories - they can occur
+# anywhere under the repo
+Debug/
+Release/
+ipch/
+
+
