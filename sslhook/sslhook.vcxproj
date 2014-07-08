@@ -74,7 +74,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="install.cpp" />
     <ClCompile Include="modnotify.cpp" />
+    <ClCompile Include="nodebug.cpp" />
     <ClCompile Include="openssl.cpp" />
     <ClCompile Include="pcap.cpp" />
     <ClCompile Include="sslhook.cpp" />
@@ -88,6 +90,11 @@
     <ClInclude Include="modnotify.h" />
     <ClInclude Include="pcap.h" />
     <ClInclude Include="Trace.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\detours\detours.vcxproj">
+      <Project>{237f0f4a-5f70-4223-a23a-7bbd49fc5c24}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

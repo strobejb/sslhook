@@ -14,6 +14,7 @@
 #include "detours.h"
 #include "Trace.h"
 
+//#pragma comment(lib, "detours.lib")
 //#define EXPORT comment(linker, "/EXPORT:hook=_hook@4")
 #define MakePtr( cast, ptr, addValue ) (cast)( (DWORD_PTR)(ptr) + (DWORD_PTR)(addValue))
 
@@ -22,7 +23,9 @@ PDETOUR_TRAMPOLINE Trampoline;
 HMODULE g_hModule;
 PVOID hookAddress = 0;
 
-void Hook_OpenSSL(DWORD_PTR write_addr, DWORD_PTR read_addr);
+void allow_debugging();
+void restore_debugging();
+void Hook_OpenSSL(DWORD_PTR write_addr, DWORD_PTR read_addr, DWORD bio_newmem);
 void UnHook_OpenSSL();
 
 BOOL init_dll_notify();
@@ -31,6 +34,7 @@ BOOL deinit_dll_notify();
 WCHAR szTargetDLL[MAX_PATH];
 DWORD_PTR SSL_Read_Target = 0;
 DWORD_PTR SSL_Write_Target = 0;
+DWORD_PTR BIO_NewMem_Target = 0;
 
 void dump_ptr(char *prefix, PVOID p)
 {
@@ -255,7 +259,7 @@ BOOL WINAPI hookopenssl(PVOID param)//WCHAR *module, DWORD_PTR addr)
 
 	__try 
 	{
-		Hook_OpenSSL(sslWrite, sslRead);
+		Hook_OpenSSL(sslWrite, sslRead, 0);
 	}
 	__except(EXCEPTION_EXECUTE_HANDLER)
 	{
@@ -283,7 +287,7 @@ BOOL check_allow_hooking(HMODULE hSllHook)
 	WCHAR *ptr;
 	
 	// hook parameters that we read from the ini file
-	WCHAR raddr[20], waddr[20];
+	WCHAR raddr[20], waddr[20], baddr[20] = L"";
 
 	// get base name of current exe
 	GetModuleBaseName(0, szExeName, MAX_PATH);
@@ -303,12 +307,16 @@ BOOL check_allow_hooking(HMODULE hSllHook)
 	if(0 == GetPrivateProfileString(szExeName, L"SSL_write", L"", waddr, 20, szIniPath))
 		return FALSE;
 
-	SSL_Read_Target  = wcstol(raddr, 0, 16);
-	SSL_Write_Target = wcstol(waddr, 0, 16);
+	GetPrivateProfileString(szExeName, L"BIO_NewMemBuf", L"", baddr, 20, szIniPath);
+
+	SSL_Read_Target   = wcstol(raddr, 0, 16);
+	SSL_Write_Target  = wcstol(waddr, 0, 16);
+	BIO_NewMem_Target = wcstol(baddr, 0, 16);
 
 	TraceA("targetDLL:     %ls", szTargetDLL);
-	TraceA("SSL_Read  RVA: %08x", SSL_Read_Target);
-	TraceA("SSL_Write RVA: %08x", SSL_Write_Target);
+	TraceA("SSL_Read   RVA: %08x", SSL_Read_Target);
+	TraceA("SSL_Write  RVA: %08x", SSL_Write_Target);
+	TraceA("BIO_NewMem RVA: %08x", BIO_NewMem_Target);
 	return TRUE;
 }
 
@@ -318,14 +326,16 @@ void module_loaded(PVOID base, WCHAR *name, WCHAR *path)
 
 	if(lstrcmpi(name, szTargetDLL) == 0)
 	{
-		DWORD read_addr  = getModuleAdjustedRVA(path, SSL_Read_Target);
-		DWORD write_addr = getModuleAdjustedRVA(path, SSL_Write_Target);
+		DWORD read_addr   = getModuleAdjustedRVA(path, SSL_Read_Target);
+		DWORD write_addr  = getModuleAdjustedRVA(path, SSL_Write_Target);
+		DWORD biomem_addr = BIO_NewMem_Target ? getModuleAdjustedRVA(path, BIO_NewMem_Target) : 0;
 
 		TraceA("Hooking OpenSSL!");
 		TraceA("SSL_Read  = %08x", read_addr);
 		TraceA("SSL_Write = %08x", write_addr);
+		TraceA("BIO_NewMem = %08x", biomem_addr);
 
-		Hook_OpenSSL(write_addr, read_addr);
+		Hook_OpenSSL(write_addr, read_addr, biomem_addr);
 	}
 }
 
@@ -345,6 +355,8 @@ BOOL CALLBACK DllMain(HINSTANCE hInstance, DWORD dwReason, LPVOID lpReserved)
 		//TraceA("Loaded!");
 		//Hook();
 
+		allow_debugging();
+
 		// install hook so we are notified when DLLs load
 		if(init_dll_notify())
 		{
@@ -356,6 +368,7 @@ BOOL CALLBACK DllMain(HINSTANCE hInstance, DWORD dwReason, LPVOID lpReserved)
 	case DLL_PROCESS_DETACH:
 
 		deinit_dll_notify();
+		restore_debugging();
 
 		if(hookAddress)
 			Unhook();

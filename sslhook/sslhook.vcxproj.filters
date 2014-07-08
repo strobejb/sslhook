@@ -30,6 +30,12 @@
     <ClCompile Include="sslhook.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="nodebug.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="install.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="sslhook.def">

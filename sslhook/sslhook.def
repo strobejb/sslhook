@@ -1,3 +1,5 @@
 EXPORTS
 	hook
 	hookopenssl
+	DllRegisterServer
+	DllUnregisterServer

@@ -90,8 +90,11 @@ typedef struct
 
 typedef int (__cdecl * SSL_PROTO)(SSL *s, void *buf, int len);
 
+typedef void* (__cdecl * BIO_NEWMEMBUF_PROTO)(void *buf, size_t len);
+
 SSL_PROTO Target_SSL_read = 0;
 SSL_PROTO Target_SSL_write = 0;
+BIO_NEWMEMBUF_PROTO Target_BIO_newmembuf = 0;
 
 int BIO_get_fd(SSL *s)
 {
@@ -221,8 +224,26 @@ int Detour_SSL_write(SSL *s, void *buf, int len)
 	return ret;
 }
 
+void * Detour_BIO_newmembuf(void *buf, size_t len)
+{
+	TraceA("BIO_new_mem_buf %x %d\n", buf, len);
 
-void Hook_OpenSSL(DWORD_PTR write_addr, DWORD_PTR read_addr)//, DWORD_PTR bio_addr)
+	WCHAR name[MAX_PATH];
+	static int counter = 0;
+	swprintf_s(name, MAX_PATH, L"%s\\%d.cer", logDir, counter++);
+
+	FILE *fp = _wfopen(name, L"wb");
+
+	if(fp)
+	{
+		fwrite(buf, 1, len, fp);
+		fclose(fp);
+	}
+
+	return Target_BIO_newmembuf(buf, len);
+}
+
+void Hook_OpenSSL(DWORD_PTR write_addr, DWORD_PTR read_addr, DWORD_PTR bio_newmem)//, DWORD_PTR bio_addr)
 {
 	// create the log directory
 	GetModuleFileName(g_hModule, logDir, MAX_PATH);
@@ -233,12 +254,16 @@ void Hook_OpenSSL(DWORD_PTR write_addr, DWORD_PTR read_addr)//, DWORD_PTR bio_ad
 
 	Target_SSL_read  = (SSL_PROTO)read_addr;
 	Target_SSL_write = (SSL_PROTO)write_addr;
+	Target_BIO_newmembuf = (BIO_NEWMEMBUF_PROTO)bio_newmem;
 
 	DetourTransactionBegin();
 	DetourUpdateThread(GetCurrentThread());
 
 	DetourAttach(&(PVOID&)Target_SSL_read,  Detour_SSL_read);
 	DetourAttach(&(PVOID&)Target_SSL_write, Detour_SSL_write);
+
+	if(Target_BIO_newmembuf)
+		DetourAttach(&(PVOID&)Target_BIO_newmembuf, Detour_BIO_newmembuf);
 
 	DetourTransactionCommit();
 }
@@ -251,8 +276,12 @@ void UnHook_OpenSSL()
 	DetourDetach(&(PVOID&)Target_SSL_read,  Detour_SSL_read);
 	DetourDetach(&(PVOID&)Target_SSL_write, Detour_SSL_write);
 
+	if(Target_BIO_newmembuf)
+		DetourDetach(&(PVOID&)Target_BIO_newmembuf, Detour_BIO_newmembuf);
+
 	Target_SSL_write = 0;
 	Target_SSL_read  = 0;
+	Target_BIO_newmembuf = 0;
 
 	DetourTransactionCommit();
 
